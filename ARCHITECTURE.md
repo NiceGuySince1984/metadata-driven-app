@@ -1,42 +1,5 @@
 # Architecture — Metadata-Driven Full-Stack Application Builder
 
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 18 + Vite + TypeScript |
-| Backend | Node.js + Express + TypeScript |
-| Database | SQLite via `better-sqlite3` |
-| Charts | Recharts |
-| Styling | Tailwind CSS |
-| Testing | Vitest (frontend) + Supertest (backend) |
-
----
-
-## The Core Rule
-
-**All UI must render from metadata. Nothing is hard-coded.**
-
-- Forms, sections, and fields come from the database. `FormRenderer` receives a `FullForm` object and builds the form from it — it has no knowledge of specific field names, types, or labels at compile time.
-- Dashboards and widgets come from the database. `DashboardRenderer` lays out whatever widgets `Dashboard.layout` describes.
-- Validation rules, conditional visibility, and computed field expressions come from the database and are read at runtime — never inlined in component code.
-- Adding a new form, field, or dashboard is a **data operation** (insert rows, reload the page), not a code change.
-
-```tsx
-// ❌ Hard-coded — never do this
-<input name="email" placeholder="Email" />
-if (!data.email.includes('@')) setError('Invalid email');
-<KpiCard title="Total Submissions" value={records.length} />
-
-// ✅ Metadata-driven — always do this
-<FormRenderer form={form} onSubmit={handleSubmit} />
-<DashboardRenderer dashboard={dashboard} records={records} />
-```
-
-The Renderer layer (`FormRenderer`, `DashboardRenderer`, `FieldRenderer`, `WidgetRenderer`) is the **only** place that reads metadata types. Components under `components/` receive plain typed props and must not import from `shared/types.ts`.
-
----
-
 ## Architectural Layers
 
 ```
@@ -82,6 +45,49 @@ The Renderer layer (`FormRenderer`, `DashboardRenderer`, `FieldRenderer`, `Widge
 ```
 
 **Rule:** the Renderer layer depends only on metadata types — it never talks to the DB directly. The UI Components layer is stateless and has no knowledge of metadata at all.
+
+### Layer descriptions
+
+**Admin UI**
+The metadata authoring surface. Lets users create and edit applications, forms, sections, fields, validation rules, and dashboards through a browser UI. Every change is a write to the metadata tables via the Express API — no code change is needed to alter what the runtime app renders.
+
+**Runtime App UI**
+The end-user surface. Renders forms for data entry and dashboards for data visualisation. Has no knowledge of specific field names, widget types, or validation logic — it receives metadata from the API and hands it to the Renderer layer.
+
+**Renderer Layer** (`client/src/renderer/`)
+The bridge between metadata and React component trees. Receives strongly-typed metadata objects (`FullForm`, `Dashboard`, etc.) and produces the correct component hierarchy at runtime. This is the only layer that reads `shared/types.ts`. Four renderers cover all cases:
+
+| Renderer | Input | Responsibility |
+|---|---|---|
+| `FormRenderer` | `FullForm` | Iterates sections → fields; manages field values, visibility conditions, computed expressions, and validation state |
+| `FieldRenderer` | `FieldWithRules` | Dispatches to the correct field component (`TextInput`, `SelectInput`, etc.) based on `field.type` |
+| `DashboardRenderer` | `Dashboard` + records | Lays out widgets from `dashboard.layout`; passes record data to each widget |
+| `WidgetRenderer` | `Widget` + records | Dispatches to `KpiCard`, `BarChartWidget`, or `DataTable` based on `widget.type` |
+
+**UI Components Layer** (`client/src/components/`)
+Dumb, reusable React components. They receive plain typed props (strings, numbers, booleans, callbacks) and emit typed events. They have no knowledge of metadata, field names, or validation rules and must not import from `shared/types.ts`. This makes them independently testable and reusable outside the metadata system.
+
+**Routes Layer** (`server/src/routes/`)
+Thin Express route handlers. Each handler validates the request shape, calls one or more repository functions, and returns JSON. No SQL lives here. Route handlers also delegate validation to `shared/validation.ts` before persisting a submitted record.
+
+**Persistence Layer / Repositories** (`server/src/repositories/`)
+All SQL lives here — one file per entity. Repository functions are the only code that touches the database. Every write operation automatically appends an entry to the audit log before returning, keeping audit concerns out of route handlers.
+
+**SQLite Database**
+A single file (`data/app.db`). The schema separates metadata tables (forms, fields, rules, widgets, dashboards) from runtime tables (records, saved views, preferences, audit log). JSON `config` columns hold entity-specific properties, keeping the table structure stable as metadata evolves without requiring `ALTER TABLE` migrations.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + Vite + TypeScript |
+| Backend | Node.js + Express + TypeScript |
+| Database | SQLite via `better-sqlite3` |
+| Charts | Recharts |
+| Styling | Tailwind CSS |
+| Testing | Vitest (frontend) + Supertest (backend) |
 
 ---
 
