@@ -71,6 +71,11 @@ describe('isFieldVisible', () => {
     expect(isFieldVisible(field(), {})).toBe(true);
   });
 
+  it('returns true when visibility is explicitly null', () => {
+    const f = field({ config: { visibility: null } });
+    expect(isFieldVisible(f, {})).toBe(true);
+  });
+
   it('returns false when condition is not met', () => {
     const f = field({ config: { visibility: { dependsOn: 'ctrl', operator: 'eq', value: 'yes' } } });
     expect(isFieldVisible(f, { ctrl: 'no' })).toBe(false);

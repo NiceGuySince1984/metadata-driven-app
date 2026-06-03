@@ -124,6 +124,76 @@ describe('GET /api/records/:id', () => {
   });
 });
 
+describe('DELETE /api/records/:id', () => {
+  it('deletes an existing record and returns 204', async () => {
+    const create = await request(app)
+      .post('/api/records')
+      .send({
+        formId: 'form_001',
+        data: { firstName: 'Del', lastName: 'Me', email: 'del@test.com', product: 'Product B', rating: 2 },
+      });
+    expect(create.status).toBe(201);
+    const id = create.body.id;
+
+    const del = await request(app).delete(`/api/records/${id}`);
+    expect(del.status).toBe(204);
+  });
+
+  it('returns 404 when deleting a non-existent record', async () => {
+    const res = await request(app).delete('/api/records/does-not-exist');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when fetching a deleted record', async () => {
+    const create = await request(app)
+      .post('/api/records')
+      .send({
+        formId: 'form_001',
+        data: { firstName: 'Gone', lastName: 'Soon', email: 'gone@test.com', product: 'Product C', rating: 3 },
+      });
+    const id = create.body.id;
+
+    await request(app).delete(`/api/records/${id}`);
+
+    const get = await request(app).get(`/api/records/${id}`);
+    expect(get.status).toBe(404);
+  });
+});
+
+describe('save → read roundtrip', () => {
+  it('returns exactly the submitted data when the record is fetched by id', async () => {
+    const payload = {
+      firstName: 'Roundtrip',
+      lastName: 'Test',
+      email: 'roundtrip@example.com',
+      product: 'Product A',
+      rating: 4,
+      wouldRecommend: true,
+      purchaseDate: '2026-05-01',
+      comments: 'All good',
+    };
+
+    const create = await request(app)
+      .post('/api/records')
+      .send({ formId: 'form_001', data: payload });
+    expect(create.status).toBe(201);
+
+    const get = await request(app).get(`/api/records/${create.body.id}`);
+    expect(get.status).toBe(200);
+
+    // Every submitted field must come back with the exact same value
+    for (const [key, value] of Object.entries(payload)) {
+      expect(get.body.data[key]).toStrictEqual(value);
+    }
+
+    // Top-level envelope fields are correct
+    expect(get.body.formId).toBe('form_001');
+    expect(get.body.formVersion).toBe(1);
+    expect(get.body.applicationId).toBe('app_001');
+    expect(get.body.submittedAt).toBeDefined();
+  });
+});
+
 describe('GET /api/forms/:id (metadata-to-UI rendering)', () => {
   it('returns the full assembled form with sections, fields, and rules', async () => {
     const res = await request(app).get('/api/forms/form_001');

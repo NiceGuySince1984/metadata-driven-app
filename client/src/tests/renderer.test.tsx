@@ -232,11 +232,93 @@ describe('evaluateExpression — unit tests', () => {
     )).toBe(10);
   });
 
-  it('template interpolates field placeholders', () => {
+  it('subtract subtracts remaining fields from the first', () => {
+    expect(evaluateExpression(
+      { op: 'subtract', fields: ['total', 'discount'] },
+      { total: 100, discount: 20 },
+    )).toBe(80);
+  });
+
+  it('subtract with a single field returns that value', () => {
+    expect(evaluateExpression(
+      { op: 'subtract', fields: ['price'] },
+      { price: 42 },
+    )).toBe(42);
+  });
+
+  it('multiply returns the product of all field values', () => {
+    expect(evaluateExpression(
+      { op: 'multiply', fields: ['qty', 'price'] },
+      { qty: 3, price: 25 },
+    )).toBe(75);
+  });
+
+  it('multiply treats missing fields as 0, yielding 0', () => {
+    expect(evaluateExpression(
+      { op: 'multiply', fields: ['qty', 'price'] },
+      { qty: 3 },
+    )).toBe(0);
+  });
+
+  it('template interpolates a single placeholder', () => {
     expect(evaluateExpression(
       { op: 'template', template: 'Hello, {{name}}!' },
       { name: 'World' },
     )).toBe('Hello, World!');
+  });
+
+  it('template interpolates multiple placeholders', () => {
+    expect(evaluateExpression(
+      { op: 'template', template: '{{first}} {{last}} <{{email}}>' },
+      { first: 'Jane', last: 'Doe', email: 'jane@example.com' },
+    )).toBe('Jane Doe <jane@example.com>');
+  });
+
+  it('template renders empty string for missing keys', () => {
+    expect(evaluateExpression(
+      { op: 'template', template: 'Hi {{name}}' },
+      {},
+    )).toBe('Hi ');
+  });
+});
+
+describe('FormRenderer — field type rendering', () => {
+  const TYPED_FORM: FullForm = {
+    id: 'typed_form',
+    applicationId: 'app',
+    name: 'Typed',
+    version: 1,
+    config: {},
+    crossFieldRules: [],
+    sections: [{
+      id: 's1', formId: 'typed_form', title: 'Fields', order: 1,
+      fields: [
+        { id: 'f_cb',   sectionId: 's1', name: 'agreed',    label: 'I agree',      type: 'checkbox', order: 1, config: {}, validationRules: [] },
+        { id: 'f_date', sectionId: 's1', name: 'dob',       label: 'Date of Birth', type: 'date',    order: 2, config: {}, validationRules: [] },
+        { id: 'f_num',  sectionId: 's1', name: 'score',     label: 'Score',         type: 'number',  order: 3, config: { expression: { op: 'subtract', fields: ['a', 'b'] } }, validationRules: [] },
+      ],
+    }],
+  };
+
+  it('renders a toggle switch (role=switch) for checkbox fields', () => {
+    render(<FormRenderer form={TYPED_FORM} onSubmit={vi.fn()} />);
+    const toggle = screen.getByRole('switch', { name: /I agree/i });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('toggles checkbox aria-checked when clicked', async () => {
+    const user = userEvent.setup();
+    render(<FormRenderer form={TYPED_FORM} onSubmit={vi.fn()} />);
+    const toggle = screen.getByRole('switch', { name: /I agree/i });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('renders a date input for date fields', () => {
+    render(<FormRenderer form={TYPED_FORM} onSubmit={vi.fn()} />);
+    const dateInput = screen.getByLabelText(/Date of Birth/i);
+    expect(dateInput).toHaveAttribute('type', 'date');
   });
 });
 
