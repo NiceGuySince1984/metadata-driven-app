@@ -13,6 +13,30 @@
 
 ---
 
+## The Core Rule
+
+**All UI must render from metadata. Nothing is hard-coded.**
+
+- Forms, sections, and fields come from the database. `FormRenderer` receives a `FullForm` object and builds the form from it — it has no knowledge of specific field names, types, or labels at compile time.
+- Dashboards and widgets come from the database. `DashboardRenderer` lays out whatever widgets `Dashboard.layout` describes.
+- Validation rules, conditional visibility, and computed field expressions come from the database and are read at runtime — never inlined in component code.
+- Adding a new form, field, or dashboard is a **data operation** (insert rows, reload the page), not a code change.
+
+```tsx
+// ❌ Hard-coded — never do this
+<input name="email" placeholder="Email" />
+if (!data.email.includes('@')) setError('Invalid email');
+<KpiCard title="Total Submissions" value={records.length} />
+
+// ✅ Metadata-driven — always do this
+<FormRenderer form={form} onSubmit={handleSubmit} />
+<DashboardRenderer dashboard={dashboard} records={records} />
+```
+
+The Renderer layer (`FormRenderer`, `DashboardRenderer`, `FieldRenderer`, `WidgetRenderer`) is the **only** place that reads metadata types. Components under `components/` receive plain typed props and must not import from `shared/types.ts`.
+
+---
+
 ## Architectural Layers
 
 ```
