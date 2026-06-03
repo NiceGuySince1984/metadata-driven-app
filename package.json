@@ -1,0 +1,10 @@
+{
+  "name": "metadata-driven-app",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "seed": "npm run seed --prefix server",
+    "test:server": "npm run test --prefix server",
+    "install:all": "npm install && npm install --prefix server"
+  }
+}
